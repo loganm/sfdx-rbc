@@ -1,9 +1,8 @@
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Connection, Messages, Org } from '@salesforce/core';
-import { Record } from 'jsforce';
-import { log } from '@oclif/core/lib/cli-ux';
 import * as fs from 'fs-extra';
 import { loadConfig, RbcConfig } from '../../common/config';
+import { retrieve } from '../../common/salesforceOrg';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('sfdx-rbc', 'rbc.retrieve');
@@ -49,46 +48,30 @@ export default class RbcRetrieve extends SfCommand<RbcRetrieveResult> {
     // Get connection from the org
     const conn: Connection = targetOrg.getConnection(apiVersion);
 
-    // Get the schema for objects from the target org
-    const objectDescribes = await Promise.all(config.objects.map((object) => conn.describeSObject(object.apiName)));
+    const salesforceOrg = await retrieve(config, conn);
 
-    // Query each object
-    const objectRecords = await Promise.all(
-      objectDescribes.map((objectDescribe) => conn.query(`SELECT Id, Name FROM ${objectDescribe.name}`))
-    );
+    const rbcRootDirectory = 'rbc';
+    await fs.remove(rbcRootDirectory); // Remove the 'rbc' directory if it exists
+    await fs.mkdirp(rbcRootDirectory); // Create the 'rbc' directory
 
-    // Write records to files
-    const promises: Array<Promise<void>> = [];
-    objectRecords.forEach((object) =>
-      object.records.forEach((record) => {
-        promises.push(writeRecordFile(config, record));
+    await Promise.all(
+      salesforceOrg.objects.map(async (object) => {
+        const rbcObjectDirectory = `${rbcRootDirectory}/${object.apiName}`;
+        await fs.mkdirp(rbcObjectDirectory); // Create the 'rbc/object' directory
+
+        await Promise.all(
+          object.records.map(async (record) => {
+            const filePath = `${rbcObjectDirectory}/${record[object.externalIdField] as string}.json`;
+            const jsonContent = JSON.stringify(record, null, 2); // Convert the record to pretty JSON
+            await fs.writeFile(filePath, jsonContent); // Write the record to a file
+          })
+        );
       })
     );
-    await Promise.all(promises);
 
     // Return something because I have to. Will deal with JSON return value later.
     return {
       path: '/Users/logan/Source/sfdx-rbc/src/commands/rbc/retrieve.ts',
     };
-  }
-}
-
-async function writeRecordFile(config: RbcConfig, record: Record): Promise<void> {
-  const objectConfig = config.objects.find((object) => object.apiName === record.attributes?.type);
-  if (!objectConfig) {
-    log('Object configuration not found.');
-    return;
-  }
-  const rbcRootDirectory = 'rbc';
-  const rbcObjectDirectory = `${rbcRootDirectory}/${objectConfig.apiName}`;
-  const filePath = `${rbcObjectDirectory}/${String(record[objectConfig.externalId])}.json`;
-
-  try {
-    await fs.remove(rbcRootDirectory); // Remove the 'rbc' directory if it exists
-    await fs.mkdirp(rbcObjectDirectory); // Create the 'rbc/object' directory
-    const jsonContent = JSON.stringify(record, null, 2); // Convery the record to pretty JSON
-    await fs.writeFile(filePath, jsonContent); // Write the record to a file
-  } catch (e) {
-    log('Failed to write file');
   }
 }
