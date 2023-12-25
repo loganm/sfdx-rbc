@@ -1,0 +1,16 @@
+{
+  "objects": [
+    {
+      "apiName": "ObjectA__c",
+      "externalId": "ExternalId__c"
+    },
+    {
+      "apiName": "ObjectB__c",
+      "externalId": "ExternalId__c"
+    },
+    {
+      "apiName": "ObjectC__c",
+      "externalId": "ExternalId__c"
+    }
+  ]
+}
