@@ -9,10 +9,8 @@ export type SalesforceObject = {
   records: SalesforceRecord[];
 };
 
-export declare type SalesforceRecord = {
+export type SalesforceRecord = {
   [field: string]: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-  externalId: string;
-  externalIdField: string;
 };
 
 export async function retrieveObject(
@@ -27,12 +25,27 @@ export async function retrieveObject(
   return {
     apiName,
     externalIdField,
-    records: recordsQueryResult.records.map((record) => convertToSalesforceRecord(record, externalIdField)),
+    records: recordsQueryResult.records.map((record) => convertToSalesforceRecord(record, config)),
   };
 }
 
-function convertToSalesforceRecord(record: Record, externalIdField: string): SalesforceRecord {
-  return { ...record, externalId: record[externalIdField] as string, externalIdField };
+function convertToSalesforceRecord(record: Record, config: RbcConfig): SalesforceRecord {
+  const salesforceRecord: SalesforceRecord = {};
+  for (const field in record) {
+    if (field === 'Id' || field === 'attributes') {
+      // do nothing
+    } else if (record[field] instanceof Object) {
+      const reference = record[field]; // eslint-disable-line
+      const referencedObjectConfig = config.objects.find((object) => object.apiName === reference.attributes?.type); // eslint-disable-line
+      if (referencedObjectConfig) {
+        const fieldName = `${field}.${referencedObjectConfig.externalId}`;
+        salesforceRecord[fieldName] = reference[referencedObjectConfig.externalId]; // eslint-disable-line
+      }
+    } else {
+      salesforceRecord[field] = record[field]; // eslint-disable-line
+    }
+  }
+  return salesforceRecord;
 }
 
 function buildQuery(config: RbcConfig, describe: SalesforceOrgDescribe, apiName: string): string {
