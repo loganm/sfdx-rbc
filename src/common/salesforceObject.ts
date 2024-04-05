@@ -60,7 +60,7 @@ function buildQuery(config: RbcConfig, describe: SalesforceOrgDescribe, apiName:
   const fields: string[] = [];
   objectDescribe.fields.map((field) => {
     if (field.createable) {
-      if (field.type === 'reference') {
+      if (field.type === 'reference' && field.relationshipName !== null) {
         if (config.objects.find((object) => field.referenceTo && object.apiName === field.referenceTo[0])) {
           fields.push(`${field.relationshipName}.${objectConfig.externalId}`);
         }
